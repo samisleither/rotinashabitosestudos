@@ -1,0 +1,450 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>StudyAdapt — Sistema Inteligente de Estudos de Samisleither</title>
+  <meta name="description" content="Sistema adaptativo de organização de estudos e rotina inteligente para Samisleither com replanejamento automático e repetição espaçada.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,400&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+  <script src="https://cdn.jsdelivr.net/npm/feather-icons/dist/feather.min.js"></script>
+</head>
+<body>
+  <div class="app-container">
+    <!-- Sidebar Navigation -->
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="brand-icon">
+          <i data-feather="zap"></i>
+        </div>
+        <div class="brand-text">
+          <h2>Study<span>Adapt</span></h2>
+          <span class="badge-tag">Rotina Inteligente</span>
+        </div>
+      </div>
+
+      <nav class="nav-menu">
+        <button class="nav-item active" data-tab="dashboard">
+          <i data-feather="grid"></i>
+          <span>Painel Principal</span>
+        </button>
+        <button class="nav-item" data-tab="subjects">
+          <i data-feather="book"></i>
+          <span>Matérias & Conteúdos</span>
+        </button>
+        <button class="nav-item" data-tab="timer">
+          <i data-feather="clock"></i>
+          <span>Timer Pomodoro</span>
+        </button>
+        <button class="nav-item" data-tab="reviews">
+          <i data-feather="repeat"></i>
+          <span>Revisões Espaçadas</span>
+        </button>
+        <button class="nav-item" data-tab="performance">
+          <i data-feather="activity"></i>
+          <span>Desempenho & Simulados</span>
+        </button>
+        <button class="nav-item" data-tab="settings">
+          <i data-feather="sliders"></i>
+          <span>Perfil de Samisleither</span>
+        </button>
+      </nav>
+
+      <div class="sidebar-footer">
+        <div class="user-sidebar-card">
+          <div class="user-avatar-glow">S</div>
+          <div class="user-info">
+            <span class="user-name">samisleither</span>
+            <span class="user-role">Estudante Focus</span>
+          </div>
+        </div>
+
+        <div class="streak-card">
+          <div class="streak-icon">🔥</div>
+          <div class="streak-info">
+            <span class="streak-count" id="streak-days">5 Dias Seguidos</span>
+            <span class="streak-label">Sequência de Estudos</span>
+          </div>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Main Content Area -->
+    <main class="main-content">
+      <!-- Topbar Header -->
+      <header class="topbar">
+        <div class="topbar-welcome">
+          <h1 id="welcome-title">Olá, samisleither 👋</h1>
+          <p id="exam-countdown-text">Faltam <strong>45 dias</strong> para o ENEM 2026 / Provas</p>
+        </div>
+
+        <div class="topbar-actions">
+          <div class="rhythm-pill status-on-track" id="rhythm-indicator">
+            <span class="rhythm-dot"></span>
+            <span id="rhythm-text">Ritmo: No Prazo</span>
+          </div>
+          <button class="btn btn-primary" id="btn-quick-reschedule">
+            <i data-feather="refresh-cw"></i> Replanejar Agora
+          </button>
+        </div>
+      </header>
+
+      <!-- Re-planning Notification Banner -->
+      <div id="reschedule-banner" class="banner banner-info hidden">
+        <div class="banner-content">
+          <i data-feather="cpu"></i>
+          <span id="reschedule-banner-msg">Motor Adaptativo ativo: Conteúdos pendentes de samisleither foram redistribuídos nos próximos dias sem criar sobrecarga!</span>
+        </div>
+        <button class="btn-close" id="btn-close-banner">&times;</button>
+      </div>
+
+      <!-- TAB 1: DASHBOARD / TELA INICIAL -->
+      <section id="tab-dashboard" class="tab-pane active">
+        <!-- Overview Key Metrics Grid -->
+        <div class="stats-grid">
+          <div class="stat-card">
+            <div class="stat-icon bg-indigo"><i data-feather="check-square"></i></div>
+            <div class="stat-data">
+              <span class="stat-value" id="stat-completed-today">0/4</span>
+              <span class="stat-label">Meta do Dia</span>
+            </div>
+          </div>
+
+          <div class="stat-card">
+            <div class="stat-icon bg-emerald"><i data-feather="clock"></i></div>
+            <div class="stat-data">
+              <span class="stat-value" id="stat-hours-today">4.0h</span>
+              <span class="stat-label">Disponibilidade Diária</span>
+            </div>
+          </div>
+
+          <div class="stat-card">
+            <div class="stat-icon bg-purple"><i data-feather="repeat"></i></div>
+            <div class="stat-data">
+              <span class="stat-value" id="stat-pending-reviews">3</span>
+              <span class="stat-label">Revisões Agendadas</span>
+            </div>
+          </div>
+
+          <div class="stat-card">
+            <div class="stat-icon bg-amber"><i data-feather="pie-chart"></i></div>
+            <div class="stat-data">
+              <span class="stat-value" id="stat-progress-pct">68%</span>
+              <span class="stat-label">Progresso do Edital</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="dashboard-columns">
+          <!-- Column 1: Today's Tasks & Schedule -->
+          <div class="card card-tasks">
+            <div class="card-header">
+              <div class="card-title">
+                <i data-feather="calendar"></i>
+                <h3>Cronograma Adaptativo para Hoje</h3>
+              </div>
+              <span class="date-badge" id="current-date-str">Hoje</span>
+            </div>
+            <div class="card-body">
+              <p class="section-desc">Se a rotina falhar, o StudyAdapt recalcula o plano de <strong>samisleither</strong> automaticamente. Sem acúmulo e sem culpa!</p>
+              
+              <div id="today-tasks-list" class="task-list">
+                <!-- Tasks dynamic injection -->
+              </div>
+            </div>
+          </div>
+
+          <!-- Column 2: Focus Timer & Adaptive Engine Status -->
+          <div class="card-column-right">
+            <!-- Mini Pomodoro Timer Widget -->
+            <div class="card widget-pomodoro">
+              <div class="card-header">
+                <div class="card-title">
+                  <i data-feather="play-circle"></i>
+                  <h3>Sessão de Foco Pomodoro</h3>
+                </div>
+                <span class="badge-tag">Foco de 25 min</span>
+              </div>
+              <div class="card-body text-center">
+                <div class="timer-display" id="dash-timer-display">25:00</div>
+                <p class="timer-subtext" id="dash-timer-subject">Tópico: Matemática & Geometria</p>
+                
+                <div class="timer-controls">
+                  <button class="btn btn-primary btn-sm" id="dash-btn-timer-toggle">
+                    <i data-feather="play" id="dash-timer-icon"></i> Iniciar
+                  </button>
+                  <button class="btn btn-secondary btn-sm" id="dash-btn-timer-reset">
+                    <i data-feather="rotate-ccw"></i> Resetar
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Adaptive Engine Card -->
+            <div class="card card-adaptive-info">
+              <div class="card-header">
+                <div class="card-title">
+                  <i data-feather="shield"></i>
+                  <h3>Algoritmo Replanejador</h3>
+                </div>
+              </div>
+              <div class="card-body">
+                <div class="adaptive-status-box">
+                  <div class="status-icon"><i data-feather="check"></i></div>
+                  <div class="status-details">
+                    <h4>Ajuste Sem Culpa</h4>
+                    <p>Aluno: <strong>samisleither</strong>. Falhou um dia? O sistema espalha o conteúdo em blocos curtos sem estresse.</p>
+                  </div>
+                </div>
+
+                <div class="progress-box">
+                  <div class="progress-info">
+                    <span>Meta Global do Edital</span>
+                    <span id="progress-box-pct">68%</span>
+                  </div>
+                  <div class="progress-bar-container">
+                    <div class="progress-bar-fill" id="progress-bar-fill" style="width: 68%;"></div>
+                  </div>
+                </div>
+
+                <div class="quick-add-simulado">
+                  <h4>Registrar Simulado Recente</h4>
+                  <div class="form-row">
+                    <select id="quick-sim-subject" class="form-control"></select>
+                    <input type="number" id="quick-sim-score" class="form-control" placeholder="% Acerto" min="0" max="100">
+                    <button class="btn btn-accent" id="btn-quick-sim-save"><i data-feather="plus"></i> Salvar</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- TAB 2: MATÉRIAS & TÓPICOS -->
+      <section id="tab-subjects" class="tab-pane">
+        <div class="page-header">
+          <div>
+            <h2>Matérias & Conteúdos de Samisleither</h2>
+            <p>Gerencie suas disciplinas, atribua graus de dificuldade e cadastre tópicos do edital.</p>
+          </div>
+          <button class="btn btn-primary" id="btn-open-subject-modal">
+            <i data-feather="plus-circle"></i> Nova Matéria
+          </button>
+        </div>
+
+        <div class="subjects-grid" id="subjects-container"></div>
+      </section>
+
+      <!-- TAB 3: POMODORO TIMER FULL PAGE -->
+      <section id="tab-timer" class="tab-pane">
+        <div class="page-header">
+          <div>
+            <h2>Temporizador de Estudo Focado</h2>
+            <p>Técnica Pomodoro customizada para otimizar a concentração de samisleither.</p>
+          </div>
+        </div>
+
+        <div class="card pomodoro-full-card">
+          <div class="card-body text-center">
+            <div class="pomodoro-mode-selector">
+              <button class="mode-btn active" data-time="1500">25 min (Foco)</button>
+              <button class="mode-btn" data-time="3000">50 min (Intenso)</button>
+              <button class="mode-btn" data-time="300">5 min (Pausa)</button>
+            </div>
+
+            <div class="main-timer-circle">
+              <div class="main-timer-value" id="full-timer-display">25:00</div>
+              <span class="main-timer-label" id="full-timer-status">Pronto para começar</span>
+            </div>
+
+            <div class="main-timer-actions">
+              <button class="btn btn-primary btn-lg" id="full-btn-timer-start">
+                <i data-feather="play"></i> Iniciar Sessão
+              </button>
+              <button class="btn btn-secondary btn-lg" id="full-btn-timer-reset">
+                <i data-feather="rotate-ccw"></i> Resetar
+              </button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- TAB 4: REVISÕES ESPAÇADAS -->
+      <section id="tab-reviews" class="tab-pane">
+        <div class="page-header">
+          <div>
+            <h2>Revisões Espaçadas Automáticas</h2>
+            <p>Combate direto à curva do esquecimento com ciclos de 1d, 3d, 7d e 15d.</p>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <h3>Fila de Repetição Espaçada</h3>
+          </div>
+          <div class="card-body">
+            <div class="reviews-timeline" id="reviews-timeline-container"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- TAB 5: DESEMPENHO & SIMULADOS -->
+      <section id="tab-performance" class="tab-pane">
+        <div class="page-header">
+          <div>
+            <h2>Análise de Desempenho de Samisleither</h2>
+            <p>Cruzamento de horas dedicadas x rendimento em simulados por disciplina.</p>
+          </div>
+        </div>
+
+        <div class="performance-grid">
+          <div class="card">
+            <div class="card-header">
+              <h3>Tempo Estudado vs Taxa de Acertos</h3>
+            </div>
+            <div class="card-body">
+              <div class="chart-container">
+                <canvas id="performanceChart" width="600" height="300"></canvas>
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-header">
+              <h3>Histórico de Simulados</h3>
+            </div>
+            <div class="card-body">
+              <div class="table-responsive">
+                <table class="data-table">
+                  <thead>
+                    <tr>
+                      <th>Data</th>
+                      <th>Matéria</th>
+                      <th>Acertos</th>
+                      <th>Status</th>
+                    </tr>
+                  </thead>
+                  <tbody id="sim-history-tbody"></tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- TAB 6: PERFIL DE SAMISLEITHER -->
+      <section id="tab-settings" class="tab-pane">
+        <div class="page-header">
+          <div>
+            <h2>Configurações do Perfil de Samisleither</h2>
+            <p>Ajuste sua meta acadêmica, horas disponíveis por dia e parâmetros da rotina.</p>
+          </div>
+        </div>
+
+        <div class="card card-settings-form">
+          <div class="card-body">
+            <form id="settings-form">
+              <div class="form-group">
+                <label for="setting-user-name">Nome do Estudante</label>
+                <input type="text" id="setting-user-name" class="form-control" value="samisleither" required>
+              </div>
+
+              <div class="form-group">
+                <label for="setting-exam-name">Objetivo / Exame Alvo</label>
+                <input type="text" id="setting-exam-name" class="form-control" value="ENEM 2026 / Vestibular Medicina" required>
+              </div>
+
+              <div class="form-row">
+                <div class="form-group">
+                  <label for="setting-exam-date">Data da Prova</label>
+                  <input type="date" id="setting-exam-date" class="form-control" required>
+                </div>
+
+                <div class="form-group">
+                  <label for="setting-hours-day">Horas Disponíveis / Dia</label>
+                  <input type="number" id="setting-hours-day" class="form-control" min="1" max="14" step="0.5" value="4" required>
+                </div>
+              </div>
+
+              <div class="form-actions">
+                <button type="submit" class="btn btn-primary"><i data-feather="save"></i> Salvar Preferências de Samisleither</button>
+                <button type="button" class="btn btn-secondary" id="btn-reset-demo"><i data-feather="rotate-ccw"></i> Restaurar Dados Originais</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <!-- Modal Nova Matéria -->
+  <div class="modal-overlay hidden" id="modal-subject">
+    <div class="modal">
+      <div class="modal-header">
+        <h3>Criar Nova Matéria</h3>
+        <button class="btn-close" id="btn-close-subject-modal">&times;</button>
+      </div>
+      <form id="form-add-subject">
+        <div class="modal-body">
+          <div class="form-group">
+            <label>Nome da Matéria</label>
+            <input type="text" id="new-sub-name" class="form-control" placeholder="Ex: Matemática, Física Quantica..." required>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label>Dificuldade (1 a 5)</label>
+              <select id="new-sub-diff" class="form-control">
+                <option value="1">1 - Muito Fácil</option>
+                <option value="2">2 - Fácil</option>
+                <option value="3" selected>3 - Média</option>
+                <option value="4">4 - Difícil</option>
+                <option value="5">5 - Muito Difícil</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Cor Identificadora</label>
+              <input type="color" id="new-sub-color" class="form-control color-input" value="#6366f1">
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" id="btn-cancel-subject">Cancelar</button>
+          <button type="submit" class="btn btn-primary">Salvar Matéria</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Modal Adicionar Tópico -->
+  <div class="modal-overlay hidden" id="modal-topic">
+    <div class="modal">
+      <div class="modal-header">
+        <h3>Adicionar Tópico de Estudo</h3>
+        <button class="btn-close" id="btn-close-topic-modal">&times;</button>
+      </div>
+      <form id="form-add-topic">
+        <input type="hidden" id="topic-subject-id">
+        <div class="modal-body">
+          <div class="form-group">
+            <label>Título do Tópico</label>
+            <input type="text" id="new-topic-title" class="form-control" placeholder="Ex: Matrizes e Determinantes..." required>
+          </div>
+          <div class="form-group">
+            <label>Tempo Estimado (minutos)</label>
+            <input type="number" id="new-topic-time" class="form-control" value="45" min="15" step="15" required>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" id="btn-cancel-topic">Cancelar</button>
+          <button type="submit" class="btn btn-primary">Adicionar Tópico</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
