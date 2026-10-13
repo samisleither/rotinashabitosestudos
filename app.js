@@ -1,6 +1,9 @@
 /* ==========================================================================
    StudyAdapt — Application Core & Pomodoro Engine for Samisleither
+   Com integração Firebase Firestore + Auth
    ========================================================================== */
+
+import firebaseService from './firebase-service.js';
 
 const DEFAULT_STATE = {
   user: {
@@ -99,12 +102,6 @@ const DEFAULT_STATE = {
 
 class StudyApp {
   constructor() {
-    this.state = this.loadState();
-    if (!this.state.user || this.state.user.name !== "samisleither") {
-      this.state.user = this.state.user || {};
-      this.state.user.name = "samisleither";
-      this.saveState();
-    }
     this.activeTab = "dashboard";
 
     // Pomodoro Timer State
@@ -113,21 +110,396 @@ class StudyApp {
     this.timerInterval = null;
     this.timerRunning = false;
 
-    this.init();
+    // Firebase
+    this.firebase = firebaseService;
+    this._saveDebounceTimer = null;
+    this._unsubscribeSnapshot = null;
+
+    // Loading overlay
+    this._showLoadingOverlay('Conectando ao Firebase...');
+
+    this.initFirebase();
   }
 
-  loadState() {
+  /* =============================================
+     Firebase Initialization
+     ============================================= */
+  async initFirebase() {
+    try {
+      await this.firebase.initialize();
+
+      // Listen for auth state changes
+      this.firebase.onAuthStateChanged(async (user) => {
+        if (user) {
+          // User is logged in — load from Firestore
+          await this._loadStateFromFirestore();
+          this.showApp();
+          this.init();
+          this._hideLoadingOverlay();
+          this._showSyncStatus('online');
+        } else {
+          // No user logged in
+          this._hideLoadingOverlay();
+          this.showRegisterScreen();
+        }
+      });
+
+      // Bind auth UI events
+      this.bindAuthEvents();
+
+      // Small delay to let auth state resolve
+      setTimeout(() => {
+        if (!this.firebase.getCurrentUser()) {
+          this._hideLoadingOverlay();
+          this.showRegisterScreen();
+        }
+      }, 3000);
+
+    } catch (error) {
+      console.error('Erro ao conectar Firebase, usando localStorage como fallback:', error);
+      this._hideLoadingOverlay();
+      this._showSyncStatus('offline');
+      // Fallback to localStorage
+      this.initAuthLegacy();
+    }
+
+    if (window.feather) feather.replace();
+  }
+
+  /* =============================================
+     Loading Overlay
+     ============================================= */
+  _showLoadingOverlay(message) {
+    let overlay = document.getElementById('firebase-loading-overlay');
+    if (!overlay) {
+      overlay = document.createElement('div');
+      overlay.id = 'firebase-loading-overlay';
+      overlay.innerHTML = `
+        <div class="firebase-loader">
+          <div class="firebase-spinner"></div>
+          <p class="firebase-loading-text">${message || 'Carregando...'}</p>
+          <p class="firebase-loading-sub">Sincronizando dados com a nuvem</p>
+        </div>
+      `;
+      document.body.appendChild(overlay);
+    } else {
+      const textEl = overlay.querySelector('.firebase-loading-text');
+      if (textEl) textEl.textContent = message;
+      overlay.classList.remove('hidden');
+    }
+  }
+
+  _hideLoadingOverlay() {
+    const overlay = document.getElementById('firebase-loading-overlay');
+    if (overlay) {
+      overlay.classList.add('fade-out');
+      setTimeout(() => overlay.remove(), 400);
+    }
+  }
+
+  /* =============================================
+     Sync Status Indicator
+     ============================================= */
+  _showSyncStatus(status) {
+    let badge = document.getElementById('sync-status-badge');
+    if (!badge) {
+      badge = document.createElement('div');
+      badge.id = 'sync-status-badge';
+      document.body.appendChild(badge);
+    }
+
+    if (status === 'online') {
+      badge.className = 'sync-badge sync-online';
+      badge.innerHTML = '☁️ Sincronizado';
+    } else if (status === 'saving') {
+      badge.className = 'sync-badge sync-saving';
+      badge.innerHTML = '🔄 Salvando...';
+    } else if (status === 'offline') {
+      badge.className = 'sync-badge sync-offline';
+      badge.innerHTML = '⚠️ Offline (localStorage)';
+    } else if (status === 'error') {
+      badge.className = 'sync-badge sync-error';
+      badge.innerHTML = '❌ Erro de sincronização';
+    }
+
+    // Auto-hide after 3 seconds for transient statuses
+    if (status === 'online' || status === 'saving') {
+      setTimeout(() => {
+        badge.classList.add('fade-out');
+        setTimeout(() => { badge.classList.remove('fade-out'); badge.className = 'sync-badge sync-hidden'; }, 400);
+      }, 3000);
+    }
+  }
+
+  /* =============================================
+     Firestore State Management
+     ============================================= */
+  async _loadStateFromFirestore() {
+    try {
+      const cloudState = await this.firebase.loadAppState();
+      if (cloudState) {
+        this.state = cloudState;
+        // Also save to localStorage as cache
+        this._saveToLocalStorage();
+        console.log('☁️ Estado carregado do Firestore');
+      } else {
+        // No cloud data — check localStorage or use default
+        const localState = this._loadFromLocalStorage();
+        if (localState) {
+          this.state = localState;
+          // Push to Firestore for first time
+          await this.firebase.saveAppState(this.state);
+          console.log('📤 Estado do localStorage enviado para o Firestore');
+        } else {
+          this.state = JSON.parse(JSON.stringify(DEFAULT_STATE));
+          await this.firebase.saveAppState(this.state);
+          console.log('🆕 Estado padrão criado no Firestore');
+        }
+      }
+    } catch (error) {
+      console.error('Erro ao carregar do Firestore:', error);
+      // Fallback to localStorage
+      this.state = this._loadFromLocalStorage() || JSON.parse(JSON.stringify(DEFAULT_STATE));
+    }
+  }
+
+  async saveState() {
+    // Always save to localStorage immediately (for speed/offline)
+    this._saveToLocalStorage();
+
+    // Debounced save to Firestore (avoid too many writes)
+    if (this._saveDebounceTimer) {
+      clearTimeout(this._saveDebounceTimer);
+    }
+
+    this._saveDebounceTimer = setTimeout(async () => {
+      try {
+        this._showSyncStatus('saving');
+        await this.firebase.saveAppState(this.state);
+        this._showSyncStatus('online');
+      } catch (error) {
+        console.error('Erro ao salvar no Firestore:', error);
+        this._showSyncStatus('error');
+      }
+    }, 1000); // 1 second debounce
+  }
+
+  _saveToLocalStorage() {
+    localStorage.setItem("studyadapt_samisleither_data", JSON.stringify(this.state));
+  }
+
+  _loadFromLocalStorage() {
     const saved = localStorage.getItem("studyadapt_samisleither_data");
     if (saved) {
       try { return JSON.parse(saved); } catch (e) { console.error(e); }
     }
-    return DEFAULT_STATE;
+    return null;
   }
 
-  saveState() {
-    localStorage.setItem("studyadapt_samisleither_data", JSON.stringify(this.state));
+  /* =============================================
+     Authentication / Registration System (Firebase)
+     ============================================= */
+  showRegisterScreen() {
+    document.getElementById("register-screen").classList.remove("hidden");
+    document.getElementById("login-screen").classList.add("hidden");
+    document.getElementById("app-container").classList.add("hidden");
+    if (window.feather) feather.replace();
   }
 
+  showLoginScreen() {
+    document.getElementById("register-screen").classList.add("hidden");
+    document.getElementById("login-screen").classList.remove("hidden");
+    document.getElementById("app-container").classList.add("hidden");
+    if (window.feather) feather.replace();
+  }
+
+  showApp() {
+    document.getElementById("register-screen").classList.add("hidden");
+    document.getElementById("login-screen").classList.add("hidden");
+    document.getElementById("app-container").classList.remove("hidden");
+  }
+
+  bindAuthEvents() {
+    // Toggle between register and login
+    document.getElementById("btn-go-login").addEventListener("click", (e) => {
+      e.preventDefault();
+      this.showLoginScreen();
+    });
+
+    document.getElementById("btn-go-register").addEventListener("click", (e) => {
+      e.preventDefault();
+      this.showRegisterScreen();
+    });
+
+    // Register form submit
+    document.getElementById("register-form").addEventListener("submit", (e) => {
+      e.preventDefault();
+      this.handleRegister();
+    });
+
+    // Login form submit
+    document.getElementById("login-form").addEventListener("submit", (e) => {
+      e.preventDefault();
+      this.handleLogin();
+    });
+  }
+
+  async handleRegister() {
+    const name = document.getElementById("reg-name").value.trim();
+    const email = document.getElementById("reg-email").value.trim();
+    const password = document.getElementById("reg-password").value;
+    const examName = document.getElementById("reg-exam").value;
+    const examDate = document.getElementById("reg-exam-date").value;
+    const hoursPerDay = parseFloat(document.getElementById("reg-hours").value);
+
+    if (!name || !email || !password || !examName || !examDate) {
+      this._showAuthError("register", "Por favor, preencha todos os campos.");
+      return;
+    }
+
+    // Show loading
+    const submitBtn = document.querySelector('#register-form .btn-register');
+    const originalText = submitBtn.innerHTML;
+    submitBtn.innerHTML = '<div class="btn-spinner"></div> Criando conta...';
+    submitBtn.disabled = true;
+
+    try {
+      const result = await this.firebase.register(email, password, name);
+
+      if (!result.success) {
+        this._showAuthError("register", result.error);
+        submitBtn.innerHTML = originalText;
+        submitBtn.disabled = false;
+        return;
+      }
+
+      // Initialize state with registration data
+      this.state = JSON.parse(JSON.stringify(DEFAULT_STATE));
+      this.state.user.name = name;
+      this.state.user.examName = examName;
+      this.state.user.examDate = examDate;
+      this.state.user.hoursPerDay = hoursPerDay;
+      this.state.user.streakDays = 0;
+      this.state.user.email = email;
+
+      // Save to Firestore
+      await this.firebase.saveAppState(this.state);
+      await this.firebase.saveUserProfile({
+        name,
+        email,
+        examName,
+        examDate,
+        hoursPerDay,
+        createdAt: new Date().toISOString()
+      });
+
+      this.showApp();
+      this.init();
+      this._showSyncStatus('online');
+
+    } catch (error) {
+      this._showAuthError("register", "Erro inesperado. Tente novamente.");
+      console.error(error);
+    } finally {
+      submitBtn.innerHTML = originalText;
+      submitBtn.disabled = false;
+      if (window.feather) feather.replace();
+    }
+  }
+
+  async handleLogin() {
+    const email = document.getElementById("login-email").value.trim();
+    const password = document.getElementById("login-password").value;
+
+    if (!email || !password) {
+      this._showAuthError("login", "Preencha e-mail e senha.");
+      return;
+    }
+
+    // Show loading
+    const submitBtn = document.querySelector('#login-form .btn-register');
+    const originalText = submitBtn.innerHTML;
+    submitBtn.innerHTML = '<div class="btn-spinner"></div> Entrando...';
+    submitBtn.disabled = true;
+
+    try {
+      const result = await this.firebase.login(email, password);
+
+      if (!result.success) {
+        this._showAuthError("login", result.error);
+        submitBtn.innerHTML = originalText;
+        submitBtn.disabled = false;
+        return;
+      }
+
+      // State will be loaded by onAuthStateChanged callback
+      // No need to do anything here
+
+    } catch (error) {
+      this._showAuthError("login", "Erro inesperado. Tente novamente.");
+      console.error(error);
+    } finally {
+      submitBtn.innerHTML = originalText;
+      submitBtn.disabled = false;
+      if (window.feather) feather.replace();
+    }
+  }
+
+  async handleLogout() {
+    await this.firebase.logout();
+    this._unsubscribeFromSnapshots();
+    this.showRegisterScreen();
+  }
+
+  _unsubscribeFromSnapshots() {
+    if (this._unsubscribeSnapshot) {
+      this._unsubscribeSnapshot();
+      this._unsubscribeSnapshot = null;
+    }
+  }
+
+  _showAuthError(form, message) {
+    let errorContainer;
+    if (form === "register") {
+      errorContainer = document.getElementById("register-error");
+    } else {
+      errorContainer = document.getElementById("login-error");
+    }
+
+    if (!errorContainer) {
+      errorContainer = document.createElement("div");
+      errorContainer.id = form === "register" ? "register-error" : "login-error";
+      errorContainer.className = "auth-error-msg";
+      const formEl = document.getElementById(form === "register" ? "register-form" : "login-form");
+      formEl.insertBefore(errorContainer, formEl.querySelector('.btn-register'));
+    }
+
+    errorContainer.textContent = message;
+    errorContainer.classList.remove("hidden");
+
+    // Auto-hide after 5 seconds
+    setTimeout(() => errorContainer.classList.add("hidden"), 5000);
+  }
+
+  /* =============================================
+     Legacy Auth (Fallback when Firebase is unavailable)
+     ============================================= */
+  initAuthLegacy() {
+    this.bindAuthEvents();
+
+    const loggedUser = localStorage.getItem("studyadapt_logged_user");
+    if (loggedUser) {
+      this.state = this._loadFromLocalStorage() || JSON.parse(JSON.stringify(DEFAULT_STATE));
+      this.showApp();
+      this.init();
+    } else {
+      this.showRegisterScreen();
+    }
+  }
+
+  /* =============================================
+     App Init & Events
+     ============================================= */
   init() {
     this.bindEvents();
     this.updateUI();
@@ -138,8 +510,15 @@ class StudyApp {
     document.querySelectorAll(".nav-item").forEach(btn => {
       btn.addEventListener("click", (e) => {
         const tab = e.currentTarget.getAttribute("data-tab");
-        this.switchTab(tab);
+        if (tab) this.switchTab(tab);
       });
+    });
+
+    // Logout
+    document.getElementById("btn-logout").addEventListener("click", () => {
+      if (confirm("Deseja realmente sair da sua conta?")) {
+        this.handleLogout();
+      }
     });
 
     // Re-schedule Button
@@ -371,6 +750,16 @@ class StudyApp {
     if (action === "complete") {
       task.status = "completed";
       this.scheduleSpacedReview(task);
+
+      // Log completed session to Firestore
+      this.firebase.logStudySession({
+        topicTitle: task.topicTitle,
+        subjectId: task.subjectId,
+        durationMinutes: task.durationMinutes,
+        type: task.type,
+        completedAt: new Date().toISOString()
+      }).catch(err => console.warn('Erro ao registrar sessão:', err));
+
     } else if (action === "partial") {
       task.status = "partial";
     } else if (action === "missed") {
@@ -483,13 +872,18 @@ class StudyApp {
 
     if (!name) return;
 
-    this.state.subjects.push({
+    const newSubject = {
       id: `sub_${Date.now()}`,
       name,
       difficulty: diff,
       color,
       topics: []
-    });
+    };
+
+    this.state.subjects.push(newSubject);
+
+    // Also save individually to Firestore subjects collection
+    this.firebase.saveSubject(newSubject).catch(err => console.warn('Erro ao salvar matéria:', err));
 
     this.saveState();
     this.updateUI();
@@ -516,6 +910,9 @@ class StudyApp {
         type: "new",
         status: "pending"
       });
+
+      // Update subject in Firestore
+      this.firebase.saveSubject(subject).catch(err => console.warn('Erro ao atualizar matéria:', err));
     }
 
     this.saveState();
@@ -590,18 +987,38 @@ class StudyApp {
     const now = new Date();
     const dateStr = `${String(now.getDate()).padStart(2, '0')}/${String(now.getMonth() + 1).padStart(2, '0')}/${now.getFullYear()}`;
 
-    this.state.simulations.unshift({
+    const newSim = {
+      id: `sim_${Date.now()}`,
       date: dateStr,
       subjectId: subId,
       subjectName: subName,
       accuracy: scoreVal,
       totalQuestions: 45
-    });
+    };
+
+    this.state.simulations.unshift(newSim);
+
+    // Also save to Firestore simulations collection
+    this.firebase.saveSimulation(newSim).catch(err => console.warn('Erro ao salvar simulado:', err));
 
     this.saveState();
     this.updateUI();
     document.getElementById("quick-sim-score").value = "";
-    alert("Simulado registrado com sucesso para samisleither!");
+
+    // Show success notification instead of alert
+    this._showToast("Simulado registrado com sucesso! ☁️ Salvo na nuvem.");
+  }
+
+  _showToast(message) {
+    let toast = document.getElementById('app-toast');
+    if (!toast) {
+      toast = document.createElement('div');
+      toast.id = 'app-toast';
+      document.body.appendChild(toast);
+    }
+    toast.textContent = message;
+    toast.className = 'toast-notification show';
+    setTimeout(() => { toast.className = 'toast-notification'; }, 3500);
   }
 
   renderSettings() {
@@ -617,9 +1034,17 @@ class StudyApp {
     this.state.user.examDate = document.getElementById("setting-exam-date").value;
     this.state.user.hoursPerDay = parseFloat(document.getElementById("setting-hours-day").value);
 
+    // Update profile in Firestore
+    this.firebase.saveUserProfile({
+      name: this.state.user.name,
+      examName: this.state.user.examName,
+      examDate: this.state.user.examDate,
+      hoursPerDay: this.state.user.hoursPerDay
+    }).catch(err => console.warn('Erro ao atualizar perfil:', err));
+
     this.saveState();
     this.updateUI();
-    alert("Perfil de samisleither atualizado!");
+    this._showToast("Perfil atualizado e sincronizado na nuvem! ☁️");
   }
 
   populateSubjectSelects() {
@@ -661,7 +1086,15 @@ class StudyApp {
         this.updateTimerDisplay();
       } else {
         this.stopTimer();
-        alert("🎉 Parabéns samisleither! Sessão de estudo concluída com sucesso!");
+
+        // Log Pomodoro session to Firestore
+        this.firebase.logStudySession({
+          type: 'pomodoro',
+          durationMinutes: Math.round(this.timerTotalSeconds / 60),
+          completedAt: new Date().toISOString()
+        }).catch(err => console.warn('Erro ao registrar sessão Pomodoro:', err));
+
+        this._showToast("🎉 Sessão de estudo concluída com sucesso!");
         this.resetTimer();
       }
     }, 1000);

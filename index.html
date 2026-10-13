@@ -12,7 +12,132 @@
   <script src="https://cdn.jsdelivr.net/npm/feather-icons/dist/feather.min.js"></script>
 </head>
 <body>
-  <div class="app-container">
+  <!-- Tela de Cadastro / Onboarding -->
+  <div class="register-screen" id="register-screen">
+    <div class="register-bg-effects">
+      <div class="register-orb orb-1"></div>
+      <div class="register-orb orb-2"></div>
+      <div class="register-orb orb-3"></div>
+    </div>
+
+    <div class="register-container">
+      <div class="register-brand">
+        <div class="brand-icon">
+          <i data-feather="zap"></i>
+        </div>
+        <h1>Study<span>Adapt</span></h1>
+        <p class="register-subtitle">Crie sua conta e comece a organizar seus estudos de forma inteligente</p>
+      </div>
+
+      <form id="register-form" class="register-form">
+        <div class="register-section">
+          <h3 class="register-section-title">
+            <i data-feather="user"></i>
+            Dados Pessoais
+          </h3>
+
+          <div class="form-group">
+            <label for="reg-name">Nome Completo</label>
+            <input type="text" id="reg-name" class="form-control" placeholder="Seu nome completo" required>
+          </div>
+
+          <div class="form-group">
+            <label for="reg-email">E-mail</label>
+            <input type="email" id="reg-email" class="form-control" placeholder="seuemail@exemplo.com" required>
+          </div>
+
+          <div class="form-group">
+            <label for="reg-password">Senha</label>
+            <input type="password" id="reg-password" class="form-control" placeholder="Mínimo 6 caracteres" minlength="6" required>
+          </div>
+        </div>
+
+        <div class="register-divider"></div>
+
+        <div class="register-section">
+          <h3 class="register-section-title">
+            <i data-feather="target"></i>
+            Meta Acadêmica
+          </h3>
+
+          <div class="form-group">
+            <label for="reg-exam">Objetivo / Exame Alvo</label>
+            <select id="reg-exam" class="form-control" required>
+              <option value="" disabled selected>Selecione seu objetivo</option>
+              <option value="ENEM 2026">ENEM 2026</option>
+              <option value="Vestibular Medicina">Vestibular Medicina</option>
+              <option value="Vestibular Engenharia">Vestibular Engenharia</option>
+              <option value="Vestibular Direito">Vestibular Direito</option>
+              <option value="Concurso Público">Concurso Público</option>
+              <option value="Outro">Outro</option>
+            </select>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label for="reg-exam-date">Data da Prova</label>
+              <input type="date" id="reg-exam-date" class="form-control" required>
+            </div>
+
+            <div class="form-group">
+              <label for="reg-hours">Horas Disponíveis / Dia</label>
+              <input type="number" id="reg-hours" class="form-control" min="1" max="14" step="0.5" value="4" required>
+            </div>
+          </div>
+        </div>
+
+        <button type="submit" class="btn btn-primary btn-register">
+          <i data-feather="arrow-right-circle"></i>
+          Criar Conta e Começar
+        </button>
+
+        <p class="register-login-link">
+          Já tem conta? <a href="#" id="btn-go-login">Entrar</a>
+        </p>
+      </form>
+    </div>
+  </div>
+
+  <!-- Tela de Login -->
+  <div class="register-screen hidden" id="login-screen">
+    <div class="register-bg-effects">
+      <div class="register-orb orb-1"></div>
+      <div class="register-orb orb-2"></div>
+    </div>
+
+    <div class="register-container register-container-compact">
+      <div class="register-brand">
+        <div class="brand-icon">
+          <i data-feather="zap"></i>
+        </div>
+        <h1>Study<span>Adapt</span></h1>
+        <p class="register-subtitle">Bem-vindo de volta! Entre na sua conta</p>
+      </div>
+
+      <form id="login-form" class="register-form">
+        <div class="form-group">
+          <label for="login-email">E-mail</label>
+          <input type="email" id="login-email" class="form-control" placeholder="seuemail@exemplo.com" required>
+        </div>
+
+        <div class="form-group">
+          <label for="login-password">Senha</label>
+          <input type="password" id="login-password" class="form-control" placeholder="Sua senha" required>
+        </div>
+
+        <button type="submit" class="btn btn-primary btn-register">
+          <i data-feather="log-in"></i>
+          Entrar
+        </button>
+
+        <p class="register-login-link">
+          Não tem conta? <a href="#" id="btn-go-register">Criar conta</a>
+        </p>
+      </form>
+    </div>
+  </div>
+
+  <div class="app-container hidden" id="app-container">
     <!-- Sidebar Navigation -->
     <aside class="sidebar">
       <div class="brand">
@@ -68,6 +193,11 @@
             <span class="streak-label">Sequência de Estudos</span>
           </div>
         </div>
+
+        <button class="btn btn-secondary btn-sm" id="btn-logout" style="width: 100%; margin-top: 0.5rem;">
+          <i data-feather="log-out"></i>
+          <span>Sair da Conta</span>
+        </button>
       </div>
     </aside>
 
@@ -445,6 +575,6 @@
     </div>
   </div>
 
-  <script src="app.js"></script>
+  <script type="module" src="app.js"></script>
 </body>
 </html>
